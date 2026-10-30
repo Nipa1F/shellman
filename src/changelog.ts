@@ -48,6 +48,25 @@ export function releaseNotes(body: string): string[] {
   return out;
 }
 
+/** Orders "X.Y.Z" versions: negative when `a` is older than `b`. */
+export function compareVersions(a: string, b: string): number {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0);
+  return 0;
+}
+
+/**
+ * What to show after an update, newest first: the releases after `last` (the version that ran before) up to
+ * `current`. With no `last` (settings from before Shellman remembered it), just the current release.
+ */
+export function releasesSince(releases: Release[], last: string, current: string): Release[] {
+  const shown = last
+    ? releases.filter((r) => compareVersions(r.version, last) > 0 && compareVersions(r.version, current) <= 0)
+    : releases.filter((r) => r.version === current);
+  return shown.sort((a, b) => compareVersions(b.version, a.version));
+}
+
 /** "21 Oct 2026"; empty for a missing or broken date. */
 export function releaseDate(iso: string): string {
   const d = new Date(iso);

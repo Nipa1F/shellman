@@ -1,5 +1,5 @@
 import { api } from './api';
-import { bundledChangelog, releaseDate, releaseNotes } from './changelog';
+import { bundledChangelog, releaseDate, releaseNotes, type Release } from './changelog';
 import { DEFAULT_FONT, defaultSettings, guessShellKind, uid } from './config';
 import { dialog } from './dialogs';
 import { h } from './dom';
@@ -21,29 +21,51 @@ function field(label: string, control: HTMLElement, hint?: string): HTMLElement 
   return h('label', { class: 'field' }, h('span', null, label), control, hint ? h('small', { class: 'hint' }, hint) : null);
 }
 
+/** Each release with what it changed. */
+function releaseList(releases: Release[]): HTMLElement[] {
+  return releases.map((r) => {
+    const changes = releaseNotes(r.notes);
+    const when = [releaseDate(r.date), r.version === store.sys.version ? 'this version' : ''].filter(Boolean).join(' · ');
+    return h(
+      'div',
+      { class: 'release' },
+      h('div', { class: 'release-head' }, h('b', null, r.version), when ? h('span', { class: 'hint' }, when) : null),
+      changes.length > 1 ? h('ul', null, ...changes.map((c) => h('li', null, c))) : h('p', null, changes[0] ?? 'Small fixes.'),
+    );
+  });
+}
+
+function allReleasesLink(repo: string): HTMLElement | null {
+  return repo
+    ? h('a', { href: '#', onclick: (e: Event) => { e.preventDefault(); void api.openUrl(`https://github.com/${repo}/releases`); } }, 'All releases on GitHub')
+    : null;
+}
+
 /** The latest releases and what they changed, from the notes baked into this build. */
 function whatsNew(): HTMLElement {
   const { repo, releases } = bundledChangelog();
-  const allReleases = repo
-    ? h('a', { href: '#', onclick: (e: Event) => { e.preventDefault(); void api.openUrl(`https://github.com/${repo}/releases`); } }, 'All releases on GitHub')
-    : null;
   return h(
     'div',
     { class: 'whats-new' },
     h('h3', null, "What's new"),
-    ...releases.map((r) => {
-      const changes = releaseNotes(r.notes);
-      const when = [releaseDate(r.date), r.version === store.sys.version ? 'this version' : ''].filter(Boolean).join(' · ');
-      return h(
-        'div',
-        { class: 'release' },
-        h('div', { class: 'release-head' }, h('b', null, r.version), when ? h('span', { class: 'hint' }, when) : null),
-        changes.length > 1 ? h('ul', null, ...changes.map((c) => h('li', null, c))) : h('p', null, changes[0] ?? 'Small fixes.'),
-      );
-    }),
+    ...releaseList(releases),
     releases.length ? null : h('p', { class: 'hint' }, 'Release builds list the latest changes here.'),
-    allReleases,
+    allReleasesLink(repo),
   );
+}
+
+/** Shown once after an update: what changed since the version that ran before. */
+export function whatsNewDialog(releases: Release[]): void {
+  dialog({
+    title: `What's new in Shellman ${store.sys.version}`,
+    width: 520,
+    body: h('div', { class: 'whats-new' }, ...releaseList(releases), allReleasesLink(bundledChangelog().repo)),
+    buttons: [
+      // Opens where this can be turned off, once this dialog has closed.
+      { label: 'Turn off in Settings…', onClick: () => void window.setTimeout(() => openSettings('Updates')) },
+      { label: 'Close', kind: 'primary' },
+    ],
+  });
 }
 
 export type SettingsTab = 'Appearance' | 'Terminal' | 'Shells' | 'Connections' | 'Requests' | 'Worktrees' | 'Updates' | 'About';
@@ -233,9 +255,10 @@ export function openSettings(tab?: SettingsTab): void {
     h('option', { value: 'off' }, "Don't check"),
   );
   updates.value = s.updates;
-  const updateStatus = h('span', { class: 'hint update-status' });
-  const updateBtn = h('button', { class: 'btn small', type: 'button' });
-  const renderUpdate = () => {
+  const [whatsNewEl, whatsNewOn] = check('Show what\'s new after an update', s.showWhatsNew, 'Once, on the first start of a new version. About always lists the latest changes.');
+  // The update status and its button, in Updates and again in About.
+  const updateRows = [0, 1].map(() => ({ status: h('span', { class: 'hint update-status' }), btn: h('button', { class: 'btn small', type: 'button' }) }));
+  const renderUpdateRow = (updateStatus: HTMLElement, updateBtn: HTMLButtonElement) => {
     const st = updater.state;
     updateStatus.textContent =
       st.kind === 'checking'
@@ -252,6 +275,9 @@ export function openSettings(tab?: SettingsTab): void {
                   ? st.message
                   : `You have Shellman ${store.sys.version}.`;
     updateStatus.classList.toggle('error', st.kind === 'error');
+    // A new version stands out from the usual "you have the latest" line.
+    const found = st.kind === 'available' || st.kind === 'downloading' || st.kind === 'ready';
+    updateStatus.parentElement?.classList.toggle('found', found);
     const [label, run] =
       st.kind === 'available'
         ? ['Download', () => void updater.download()]
@@ -259,9 +285,11 @@ export function openSettings(tab?: SettingsTab): void {
           ? ['Restart now', () => window.dispatchEvent(new Event('shellman:restart-to-update'))]
           : ['Check now', () => void updater.check(true)];
     updateBtn.textContent = label;
+    updateBtn.classList.toggle('primary', st.kind === 'available' || st.kind === 'ready');
     updateBtn.disabled = st.kind === 'checking' || st.kind === 'downloading';
     updateBtn.onclick = run;
   };
+  const renderUpdate = () => updateRows.forEach(({ status, btn }) => renderUpdateRow(status, btn));
   renderUpdate();
   const offUpdate = updater.on(renderUpdate);
 
@@ -335,9 +363,15 @@ export function openSettings(tab?: SettingsTab): void {
       section(
         'Updates',
         field('New versions', updates, 'Updates come from GitHub Releases and are signed; only signed installers are accepted.'),
-        h('div', { class: 'row update-row' }, updateStatus, updateBtn),
+        h('div', { class: 'row update-row' }, updateRows[0].status, updateRows[0].btn),
+        whatsNewEl,
       ),
-      section('About', h('p', { class: 'hint' }, `Shellman ${store.sys.version} · settings are stored in `, configLink), whatsNew()),
+      section(
+        'About',
+        h('p', { class: 'hint' }, `Shellman ${store.sys.version} · settings are stored in `, configLink),
+        h('div', { class: 'row update-row' }, updateRows[1].status, updateRows[1].btn),
+        whatsNew(),
+      ),
   ];
   // One tab per category; every control stays in the form, so Save takes them all.
   const tabs = sections.map((sec) => h('button', { class: 'settings-tab', type: 'button', role: 'tab', onclick: () => show(sec.dataset.tab as SettingsTab) }, sec.dataset.tab));
@@ -364,7 +398,7 @@ export function openSettings(tab?: SettingsTab): void {
         onClick: () => {
           const d = defaultSettings();
           store.update((c) => {
-            c.settings = { ...d, customShells: c.settings.customShells, sidebarVisible: c.settings.sidebarVisible, sidebarWidth: c.settings.sidebarWidth, otherTerminalsCollapsed: c.settings.otherTerminalsCollapsed };
+            c.settings = { ...d, customShells: c.settings.customShells, sidebarVisible: c.settings.sidebarVisible, sidebarWidth: c.settings.sidebarWidth, otherTerminalsCollapsed: c.settings.otherTerminalsCollapsed, lastVersion: c.settings.lastVersion };
           });
         },
       },
@@ -391,6 +425,7 @@ export function openSettings(tab?: SettingsTab): void {
             shellIntegration: integration(),
             confirmClose: confirmClose(),
             updates: updates.value as UpdateMode,
+            showWhatsNew: whatsNewOn(),
             restoreTerminals: restore.value as RestoreMode,
             reconnectOnStart: reconnect(),
             sshPath: sshPath.value.trim().replace(/^"(.*)"$/, '$1'),

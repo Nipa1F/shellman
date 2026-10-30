@@ -26,6 +26,8 @@ export function defaultSettings(): Settings {
     otherTerminalsCollapsed: false,
     customShells: [],
     updates: 'auto',
+    showWhatsNew: true,
+    lastVersion: '',
     restoreTerminals: 'all',
     reconnectOnStart: false,
     sshPath: '',
@@ -130,6 +132,8 @@ export function normalizeConfig(raw: unknown): Config {
       ? s.customShells.map(normalizeShell).filter((x): x is ShellProfile => x !== null)
       : [],
     updates: oneOf(s.updates, ['auto', 'notify', 'off'] as const, d.updates),
+    showWhatsNew: bool(s.showWhatsNew, d.showWhatsNew),
+    lastVersion: str(s.lastVersion, d.lastVersion).trim(),
     restoreTerminals: oneOf(s.restoreTerminals, ['all', 'shells', 'off'] as const, d.restoreTerminals),
     reconnectOnStart: bool(s.reconnectOnStart, d.reconnectOnStart),
     sshPath: str(s.sshPath, d.sshPath).trim(),

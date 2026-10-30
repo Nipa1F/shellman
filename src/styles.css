@@ -674,6 +674,19 @@ select.input {
   color: var(--danger);
 }
 
+.update-row.found {
+  padding: 8px 10px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.update-row.found .update-status {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .tabs {
   display: flex;
   align-items: flex-end;

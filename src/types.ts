@@ -138,6 +138,10 @@ export interface Settings {
   otherTerminalsCollapsed: boolean;
   customShells: ShellProfile[];
   updates: UpdateMode;
+  /** The first start after an update shows what changed since the version that ran before. */
+  showWhatsNew: boolean;
+  /** The version that ran last; a newer one shows what changed since, once. '' = not known yet. */
+  lastVersion: string;
   restoreTerminals: RestoreMode;
   /** Restored SSH/Telnet tabs connect right away instead of waiting for Enter. */
   reconnectOnStart: boolean;

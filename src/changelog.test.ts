@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bundledChangelog, releaseDate, releaseNotes } from './changelog';
+import { bundledChangelog, compareVersions, releaseDate, releaseNotes, releasesSince } from './changelog';
 
 describe('changelog', () => {
   it('turns GitHub generated notes into pull request titles', () => {
@@ -28,6 +28,29 @@ describe('changelog', () => {
     expect(releaseDate('2026-10-21T12:00:00Z')).toBe('21 Oct 2026');
     expect(releaseDate('')).toBe('');
     expect(releaseDate('not a date')).toBe('');
+  });
+
+  it('compares versions by number', () => {
+    expect(compareVersions('0.6.10', '0.6.9')).toBeGreaterThan(0);
+    expect(compareVersions('0.6.3', '1.0.0')).toBeLessThan(0);
+    expect(compareVersions('0.6.3', '0.6.3')).toBe(0);
+  });
+
+  it('lists the releases since the version that ran last, newest first', () => {
+    const rel = (version: string) => ({ version, date: '', notes: '' });
+    const releases = [rel('0.6.4'), rel('0.6.2'), rel('0.6.3'), rel('0.6.1'), rel('0.5.9')];
+    const versions = (last: string, current: string) => releasesSince(releases, last, current).map((r) => r.version);
+    // One update, and several skipped ones.
+    expect(versions('0.6.3', '0.6.4')).toEqual(['0.6.4']);
+    expect(versions('0.6.1', '0.6.4')).toEqual(['0.6.4', '0.6.3', '0.6.2']);
+    // The changelog may list releases newer than this build (a test build of an older version).
+    expect(versions('0.6.1', '0.6.3')).toEqual(['0.6.3', '0.6.2']);
+    // No update, or back to an older version: nothing.
+    expect(versions('0.6.4', '0.6.4')).toEqual([]);
+    expect(versions('0.6.4', '0.6.2')).toEqual([]);
+    // Settings from before the last version was kept: only this release.
+    expect(versions('', '0.6.4')).toEqual(['0.6.4']);
+    expect(versions('', '0.7.0')).toEqual([]);
   });
 
   it('reads the bundled changelog defensively', () => {
