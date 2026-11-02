@@ -42,6 +42,9 @@
     "windows": {
       "webviewInstallMode": {
         "type": "skip"
+      },
+      "nsis": {
+        "installerHooks": "./windows/hooks.nsh"
       }
     },
     "createUpdaterArtifacts": true

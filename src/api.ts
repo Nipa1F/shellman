@@ -244,6 +244,8 @@ export const api = {
   clipboardWrite: (text: string) => invoke<void>('clipboard_write', { text }),
   dirExists: (path: string) => invoke<boolean>('dir_exists', { path }),
   systemInfo: () => invoke<SystemInfo>('system_info'),
+  autostartGet: () => invoke<{ available: boolean; enabled: boolean }>('autostart_get'),
+  autostartSet: (on: boolean) => invoke<void>('autostart_set', { on }),
   openUrl: (url: string) => invoke<void>('open_url', { url }),
   openDir: (path: string) => invoke<void>('open_dir', { path }),
   /** XShell's sessions folder, or null when there is none. */
