@@ -41,7 +41,8 @@ const assert = (cond, msg) => {
 };
 
 const phase = process.argv[2] ?? 'main';
-const child = await launch();
+// The "minimized" phase starts it the way Windows does at sign-in.
+const child = await launch(phase === 'minimized' ? ['--minimized'] : []);
 const c = await connect();
 await c.waitFor('!!window.__shellman', 15000, 'app booted');
 await c.ev(HELPERS);
@@ -544,6 +545,22 @@ if (phase === 'main') {
     await shot(path.join(OUT, '07b-whats-new.png'));
     await ev(`[...document.querySelectorAll('.dialog .btn')].find(b => b.textContent === 'Cancel').click(), true`);
     await waitFor(`!document.querySelector('.dialog')`, 2000, 'settings closed');
+  });
+
+  await step("a test build can't start with Windows", async () => {
+    try {
+      await key('Comma', ',', 188, ['ctrl']);
+      await waitFor(`!!document.querySelector('.settings-dialog')`, 2000);
+      // Only an official build on the real profile may put itself in the user's startup list.
+      const startup = `[...document.querySelectorAll('.settings-dialog label.check')].find(l => l.textContent.includes('Start Shellman when Windows starts'))`;
+      await waitFor(`!!${startup} && ${startup}.querySelector('input').disabled && /Only an installed Shellman/.test(${startup}.textContent)`, 3000, 'startup option greyed out');
+      assert(!(await ev(`${startup}.querySelector('input').checked`)), 'shown as on');
+      const refused = await ev(`window.__TAURI_INTERNALS__.invoke('autostart_set', { on: true }).then(() => 'changed', (e) => String(e))`);
+      assert(/Only an installed Shellman/.test(refused), 'a test build changed the startup list: ' + refused);
+    } finally {
+      await ev(`[...document.querySelectorAll('.dialog .btn')].find(b => b.textContent === 'Cancel')?.click(), true`);
+      await waitFor(`!document.querySelector('.dialog')`, 2000, 'settings closed');
+    }
   });
 
   await step('config is persisted to disk', async () => {
@@ -2000,6 +2017,13 @@ if (phase === 'restart') {
   await step('no uncaught errors in the page', async () => {
     const errors = c.logs.filter((l) => l.startsWith('[exception]') || l.startsWith('[console.error]'));
     assert(errors.length === 0, errors.join('\n'));
+  });
+}
+
+if (phase === 'minimized') {
+  await step('started with Windows (--minimized), it opens minimized', async () => {
+    await waitFor(`window.__TAURI_INTERNALS__.invoke('plugin:window|is_minimized', { label: 'main' })`, 5000, 'minimized');
+    await waitFor(`!!window.__shellman?.workspace`, 5000, 'app started');
   });
 }
 

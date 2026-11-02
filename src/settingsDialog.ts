@@ -1,7 +1,7 @@
 import { api } from './api';
 import { bundledChangelog, releaseDate, releaseNotes } from './changelog';
 import { DEFAULT_FONT, defaultSettings, guessShellKind, uid } from './config';
-import { dialog } from './dialogs';
+import { dialog, toast } from './dialogs';
 import { h } from './dom';
 import { icons } from './icons';
 import { ACTION_LABELS, BINDINGS, bindingLabel, NOTE_BINDINGS, NOTE_LABELS, REQUEST_BINDINGS, REQUEST_LABELS, type Action } from './keys';
@@ -100,6 +100,18 @@ export function openSettings(tab?: SettingsTab): void {
     h('option', { value: 'off' }, 'Start with no terminals open'),
   );
   restore.value = s.restoreTerminals;
+  // Kept in Windows' own startup list, not in the settings file, so Task Manager can turn it off too:
+  // read from there, and only written on Save when it changed.
+  const [startupEl, startupOn] = check('Start Shellman when Windows starts', false, 'Opens minimized on the taskbar. Task Manager lists it under Startup apps.');
+  const startupInput = startupEl.querySelector('input') as HTMLInputElement;
+  startupInput.disabled = true;
+  let startupWas: boolean | null = null;
+  void api.autostartGet().then(({ available, enabled }) => {
+    startupInput.checked = enabled;
+    startupInput.disabled = !available;
+    startupWas = available ? enabled : null;
+    if (!available) startupEl.querySelector('.hint')!.textContent = 'Only an installed Shellman can start with Windows, not a development or test build.';
+  });
   const [confirmEl, confirmClose] = check('Confirm before closing terminals with running programs', s.confirmClose);
   const [reconnectEl, reconnect] = check(
     'Reconnect SSH and Telnet tabs on start',
@@ -282,6 +294,7 @@ export function openSettings(tab?: SettingsTab): void {
         'Terminal',
         h('div', { class: 'row two' }, field('Default shell', defaultShell), field('Scrollback lines', scrollback)),
         field('On start', restore, 'Tabs and splits open where you left them, each in the folder it was last in. Notes always reopen.'),
+        startupEl,
         field('Default directory', h('div', { class: 'row' }, defaultCwd, browse), 'Used for new terminals that are not opened from a session or an existing terminal.'),
         h(
           'div',
@@ -418,6 +431,9 @@ export function openSettings(tab?: SettingsTab): void {
             customShells: custom.filter((x) => x.path.trim()).map((x) => ({ ...x, name: x.name.trim() || x.path })),
           };
           store.update((c) => Object.assign(c.settings, next));
+          if (startupWas !== null && startupOn() !== startupWas) {
+            void api.autostartSet(startupOn()).catch((e) => toast(`Could not change starting with Windows: ${e}`, 'error', 10000));
+          }
         },
       },
     ],
