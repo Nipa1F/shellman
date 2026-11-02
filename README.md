@@ -90,7 +90,9 @@ Shellman runs at a time: starting it again brings the open window to the front.
   names as more of them open (hover for the full name).
 - **Picks up where you left off.** Tabs, splits and each terminal's folder are reopened on the next start,
   with startup commands run again (Settings → Terminal → On start can reopen plain shells or nothing).
-  The screen contents of terminals aren't restored.
+  The screen contents of terminals aren't restored. Settings → Terminal → "Start Shellman when Windows starts"
+  opens it minimized on the taskbar when you sign in (Task Manager lists it under Startup apps; uninstalling
+  Shellman removes it).
 - **Notes.** A note is a tab (or split) of plain text for things to keep: commands, log lines, results.
   Ctrl+Shift+J opens one; "Add to note" on a terminal's menu (Shift+right-click) adds the selected text to the
   note you used last. Notes don't have to be saved: like Notepad++, Shellman keeps their text and reopens every

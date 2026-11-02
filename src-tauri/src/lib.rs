@@ -1,4 +1,5 @@
-﻿mod collection;
+﻿mod autostart;
+mod collection;
 mod config;
 mod connect;
 mod files;
@@ -494,6 +495,37 @@ fn system_info(app: tauri::AppHandle) -> SystemInfo {
     }
 }
 
+#[derive(Serialize)]
+struct Autostart {
+    /// This build may start with Windows (see `autostart_available`).
+    available: bool,
+    enabled: bool,
+}
+
+/// Only an official build on the real profile may start with Windows. A dev, test or e2e build would
+/// otherwise put its own exe in the user's startup list.
+fn autostart_available() -> bool {
+    option_env!("VITE_SHELLMAN_RELEASE").is_some() && config_dir_override().is_none()
+}
+
+#[tauri::command]
+fn autostart_get() -> Autostart {
+    let available = autostart_available();
+    Autostart {
+        available,
+        enabled: available && autostart::is_enabled(autostart::RUN_KEY, autostart::APPROVED_KEY, autostart::VALUE_NAME),
+    }
+}
+
+#[tauri::command]
+fn autostart_set(on: bool) -> Result<(), String> {
+    if !autostart_available() {
+        return Err("Only an installed Shellman can start with Windows.".into());
+    }
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    autostart::set(autostart::RUN_KEY, autostart::APPROVED_KEY, autostart::VALUE_NAME, &exe, on)
+}
+
 /// Per-session markers that Claude Code sets for its own child processes. When
 /// Shellman is launched from inside a Claude Code session they would leak into
 /// every terminal and make a fresh `claude` think it is a nested child session.
@@ -546,6 +578,16 @@ pub fn run() {
         .manage(PtyManager::default())
         .manage(Arc::new(HttpManager::default()))
         .manage(collection::Watches::default())
+        .setup(|app| {
+            // Started with Windows: open minimized, after the window-state plugin has restored the
+            // window. It waits on the taskbar; starting Shellman again brings it up.
+            if std::env::args().any(|a| a == autostart::MINIMIZED_ARG) {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.minimize();
+                }
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             pty_spawn,
             pty_write,
@@ -577,6 +619,8 @@ pub fn run() {
             open_url,
             open_dir,
             system_info,
+            autostart_get,
+            autostart_set,
             http_send,
             http_cancel,
             http_save_body,

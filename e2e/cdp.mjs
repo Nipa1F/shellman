@@ -25,7 +25,7 @@ export async function portFree(timeout = 15000) {
   throw new Error('debug port still in use');
 }
 
-export async function launch() {
+export async function launch(args = []) {
   await portFree();
   // Launch with an environment like Explorer's: drop variables that only
   // exist because this harness runs inside a Claude Code tool shell.
@@ -34,7 +34,7 @@ export async function launch() {
   );
   // Own WebView2 profile, so the test never attaches to a Shellman you have open.
   const userData = path.join(os.tmpdir(), 'shellman-e2e-webview');
-  const child = spawn(EXE, [], {
+  const child = spawn(EXE, args, {
     env: {
       ...env,
       WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${PORT}`,

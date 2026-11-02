@@ -24,7 +24,7 @@ process.env.SHELLMAN_CONFIG_DIR = profile;
 
 let failed = false;
 try {
-  for (const phase of ['main', 'restart', 'quit']) {
+  for (const phase of ['main', 'restart', 'minimized', 'quit']) {
     console.log(`\n== ${phase}`);
     const r = spawnSync(process.execPath, [path.join(here, 'run.mjs'), phase], { stdio: 'inherit' });
     if (r.status !== 0) failed = true;
