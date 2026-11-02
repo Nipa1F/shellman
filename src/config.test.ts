@@ -110,6 +110,18 @@ describe('normalizeConfig', () => {
     expect(normalizeConfig({ settings: { diffLayout: 'sideways', showIgnoredFiles: 'yes' } as never }).settings).toMatchObject({ diffLayout: 'split', showIgnoredFiles: true });
   });
 
+  it('keeps the version that ran last, empty in settings from before it was kept', () => {
+    expect(normalizeConfig({}).settings.lastVersion).toBe('');
+    expect(normalizeConfig({ settings: { lastVersion: '0.6.3' } as never }).settings.lastVersion).toBe('0.6.3');
+    expect(normalizeConfig({ settings: { lastVersion: 6 } as never }).settings.lastVersion).toBe('');
+  });
+
+  it('shows what\'s new after an update unless turned off', () => {
+    expect(normalizeConfig({}).settings.showWhatsNew).toBe(true);
+    expect(normalizeConfig({ settings: { showWhatsNew: false } as never }).settings.showWhatsNew).toBe(false);
+    expect(normalizeConfig({ settings: { showWhatsNew: 'no' } as never }).settings.showWhatsNew).toBe(true);
+  });
+
   it('defaults request settings and corrects bad ones', () => {
     expect(normalizeConfig({}).settings).toMatchObject({
       requestPreviewTabs: true,

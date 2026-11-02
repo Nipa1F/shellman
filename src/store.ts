@@ -15,6 +15,8 @@ class Store {
   private saving: Promise<void> = Promise.resolve();
   /** The settings file exists but couldn't be read: never overwrite it in this session. */
   private saveBlocked = false;
+  /** There was no settings file yet: Shellman has just been installed (or its profile is new). */
+  freshInstall = false;
 
   async init(): Promise<void> {
     const [sys, shells, loaded] = await Promise.all([
@@ -29,6 +31,7 @@ class Store {
     this.sys = sys;
     this.detectedShells = shells;
     if (loaded?.notice) toast(loaded.notice, 'error', 15000);
+    this.freshInstall = !!loaded && !loaded.value && !loaded.notice;
     this.config = normalizeConfig(loaded?.value ?? null);
   }
 

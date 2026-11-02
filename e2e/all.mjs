@@ -17,8 +17,9 @@ if (!fs.existsSync(EXE)) {
 const profile = path.join(os.tmpdir(), 'shellman-e2e-profile');
 fs.rmSync(profile, { recursive: true, force: true });
 fs.mkdirSync(profile, { recursive: true });
-// No update checks: a local build is older than the latest release and must not install it.
-fs.writeFileSync(path.join(profile, 'config.json'), JSON.stringify({ version: 1, settings: { updates: 'off' } }));
+// No update checks: a local build is older than the latest release and must not install it. No "What's new"
+// on the first start either (a build with a changelog would show it over the first steps); its step turns it on.
+fs.writeFileSync(path.join(profile, 'config.json'), JSON.stringify({ version: 1, settings: { updates: 'off', showWhatsNew: false } }));
 process.env.SHELLMAN_CONFIG_DIR = profile;
 
 let failed = false;

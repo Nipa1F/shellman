@@ -42,7 +42,9 @@ Shellman checks GitHub Releases (`github.com/mahtinen/shellman`) 15 seconds afte
 4 hours. By default a new version downloads in the background, and a **Restart to update** button appears in
 the tab bar. If you don't restart, the update installs when you close Shellman, and the next start runs the
 new version. Settings → Updates can switch this to "tell me when a new version is out" or turn checks off.
-Settings → About lists what changed in the five latest versions, with their release dates.
+The first start after an update shows what changed since the version you ran before (also when you skipped
+some; Settings → Updates can turn this off), and Settings → About lists what changed in the five latest
+versions, with their release dates.
 
 Settings and sessions are stored in `%APPDATA%\app.shellman.desktop\config.json`. Every save also keeps
 the previous version as `config.json.bak`. If `config.json` can't be parsed (say, after a hand edit), it is

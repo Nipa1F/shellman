@@ -3,6 +3,7 @@ import './styles.css';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { api } from './api';
+import { bundledChangelog, releasesSince, type Release } from './changelog';
 import { collections } from './collections';
 import { baseName, deleteGroup, groupColor, groupPath, newGroup, ownerSession, sessionColor, uid } from './config';
 import { connectionCommand, connectionKindName, connectionLabel, connectionTarget, newSshConnection, parseQuickConnect } from './connection';
@@ -43,7 +44,7 @@ import { showPalette, type PaletteItem } from './palette';
 import { normalizeSnapshot, notesOnly, snapshotNotes, snapshotPanes } from './snapshot';
 import { gitSync } from './gitSync';
 import { editGroup, editSession, pickDirectory, shellEntries } from './sessionEditor';
-import { openSettings, openShortcuts } from './settingsDialog';
+import { openSettings, openShortcuts, whatsNewDialog } from './settingsDialog';
 import { Sidebar, type OpenTerminal } from './sidebar';
 import { store } from './store';
 import { applyUiTheme, getTheme } from './themes';
@@ -482,6 +483,21 @@ class App {
         ),
       ),
     );
+  }
+
+  /**
+   * After an update, shows once what changed since the version that ran before (not on a fresh install).
+   * `releases` is the changelog baked into this build; the e2e tests pass their own, since local builds
+   * have none.
+   */
+  showWhatsNewAfterUpdate(releases: Release[] = bundledChangelog().releases): void {
+    const current = store.sys.version;
+    const last = store.settings.lastVersion;
+    if (!current || last === current) return;
+    store.update((c) => (c.settings.lastVersion = current));
+    if (store.freshInstall || !store.settings.showWhatsNew) return;
+    const shown = releasesSince(releases, last, current);
+    if (shown.length) whatsNewDialog(shown);
   }
 
   // ---- reopening terminals after a restart ----------------------------
@@ -1577,6 +1593,7 @@ async function main(): Promise<void> {
   // For the end-to-end tests, which set up sessions and settings directly.
   (window as any).__shellmanStore = store;
   await app.restoreWorkspace();
+  app.showWhatsNewAfterUpdate();
   updater.start();
 }
 

@@ -547,6 +547,91 @@ if (phase === 'main') {
     await waitFor(`!document.querySelector('.dialog')`, 2000, 'settings closed');
   });
 
+  // Closes the dialogs a failed step left open, so the steps after it start clean.
+  const closeDialogs = async () => {
+    for (let i = 0; i < 3 && (await ev(`!!document.querySelector('.dialog')`)); i++) {
+      await ev(`(() => { const d = [...document.querySelectorAll('.dialog')].pop(); [...d.querySelectorAll('.dialog-footer .btn')].find(b => b.textContent === 'Cancel' || b.textContent === 'Close')?.click(); return true; })()`);
+      await sleep(200);
+    }
+  };
+
+  await step('settings About has the update status and Check now too', async () => {
+    try {
+      await key('Comma', ',', 188, ['ctrl']);
+      await waitFor(`!!document.querySelector('.settings-dialog')`, 2000);
+      await ev(`[...document.querySelectorAll('.settings-tab')].find(t => t.textContent === 'About').click(), true`);
+      const about = `document.querySelector('.settings-section[data-tab="About"] .update-row')`;
+      await waitFor(`!!${about} && ${about}.offsetParent !== null`, 2000, 'update row in About');
+      // The check in Updates may already have found a newer version (then the button offers Download).
+      await ev(`(() => { const b = ${about}.querySelector('.btn'); if (b.textContent === 'Check now') b.click(); return true; })()`);
+      await waitFor(`!/Checking/.test(${about}.querySelector('.update-status').textContent) && !${about}.querySelector('.btn').disabled`, 40000, 'check finished');
+      // Updates and About show the same state; a newer version found stands out (box, coloured text, primary button).
+      const rows = await ev(`[...document.querySelectorAll('.settings-dialog .update-row')].map(r => ({ text: r.textContent, found: r.classList.contains('found'), primary: r.querySelector('.btn').classList.contains('primary') }))`);
+      assert(rows.length === 2 && rows[0].text === rows[1].text, 'Updates and About differ: ' + js(rows));
+      const newer = /is available|Downloading|is downloaded/.test(rows[1].text);
+      assert(rows[1].found === newer && rows[1].primary === /is available|is downloaded/.test(rows[1].text), 'found styling: ' + js(rows[1]));
+      await shot(path.join(OUT, '07c-about-check.png'));
+      await ev(`[...document.querySelectorAll('.dialog .btn')].find(b => b.textContent === 'Cancel').click(), true`);
+      await waitFor(`!document.querySelector('.dialog')`, 2000, 'settings closed');
+    } finally {
+      await closeDialogs();
+    }
+  });
+
+  await step("What's new after an update: every release since, once, and a way to turn it off", async () => {
+    try {
+      // all.mjs turns it off for the first start; the start still remembers the version.
+      const v = await ev(`__shellmanStore.sys.version`);
+      assert((await ev(`__shellmanStore.settings.lastVersion`)) === v, 'the version that ran last was not remembered');
+      // Local builds have no changelog, so the test brings its own: this version, one in between, and the last one run.
+      const releases = [
+        { version: v, date: '', notes: '- First change\n- Second change' },
+        { version: '0.0.2', date: '', notes: 'Older change' },
+        { version: '0.0.1', date: '', notes: 'Already seen' },
+      ];
+      const updatedFrom = (last) => ev(`(() => { __shellmanStore.freshInstall = false; __shellmanStore.update(c => (c.settings.lastVersion = ${js(last)})); __shellman.showWhatsNewAfterUpdate(${js(releases)}); return true; })()`);
+      const whatsNew = `[...document.querySelectorAll('.dialog')].find(d => d.textContent.includes("What's new in Shellman"))`;
+      const button = (label) => `[...${whatsNew}.querySelectorAll('.dialog-footer .btn')].find(b => b.textContent === ${js(label)})`;
+      await ev(`__shellmanStore.update(c => (c.settings.showWhatsNew = true)), true`);
+
+      await updatedFrom('0.0.1');
+      await waitFor(`!!${whatsNew}`, 2000, "What's new after an update");
+      assert((await ev(`${whatsNew}.textContent.includes(${js(`What's new in Shellman ${v}`)})`)), 'dialog title');
+      const listed = await ev(`[...${whatsNew}.querySelectorAll('.release-head b')].map(b => b.textContent)`);
+      assert(js(listed) === js([v, '0.0.2']), 'releases shown: ' + js(listed));
+      assert((await ev(`${whatsNew}.querySelectorAll('.release li').length`)) === 2, 'changes of this version');
+      assert((await ev(`__shellmanStore.settings.lastVersion`)) === v, 'version not remembered');
+      await shot(path.join(OUT, '07d-whats-new-after-update.png'));
+      await ev(`${button('Close')}.click(), true`);
+      await waitFor(`!${whatsNew}`, 2000, 'closed');
+
+      // Only once: the next start of the same version shows nothing.
+      await ev(`__shellman.showWhatsNewAfterUpdate(${js(releases)}), true`);
+      await sleep(300);
+      assert(!(await ev(`!!${whatsNew}`)), 'shown again for the same version');
+
+      // "Turn off in Settings…" opens Settings → Updates, where it is switched off.
+      await updatedFrom('0.0.1');
+      await waitFor(`!!${whatsNew}`, 2000, "What's new again");
+      await ev(`${button('Turn off in Settings…')}.click(), true`);
+      const setting = `[...document.querySelectorAll('.settings-dialog label')].find(l => l.textContent.includes("Show what's new after an update"))`;
+      await waitFor(`!${whatsNew} && !!${setting} && ${setting}.offsetParent !== null`, 3000, 'Settings → Updates with the setting');
+      assert(await ev(`${setting}.querySelector('input').checked`), 'setting shown as on');
+      await ev(`${setting}.querySelector('input').click(), [...document.querySelectorAll('.dialog .btn')].find(b => b.textContent === 'Save').click(), true`);
+      await waitFor(`!document.querySelector('.dialog') && __shellmanStore.settings.showWhatsNew === false`, 2000, 'setting saved off');
+
+      // Off: an update still moves the version on, without the dialog.
+      await updatedFrom('0.0.1');
+      await sleep(300);
+      assert(!(await ev(`!!${whatsNew}`)), 'shown although turned off');
+      assert((await ev(`__shellmanStore.settings.lastVersion`)) === v, 'version not remembered while off');
+      await sleep(800);
+      assert(JSON.parse(fs.readFileSync(CONFIG, 'utf8')).settings.showWhatsNew === false, 'setting not saved to disk');
+    } finally {
+      await closeDialogs();
+    }
+  });
+
   await step("a test build can't start with Windows", async () => {
     try {
       await key('Comma', ',', 188, ['ctrl']);
