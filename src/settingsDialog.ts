@@ -257,8 +257,12 @@ export function openSettings(tab?: SettingsTab): void {
   updates.value = s.updates;
   const [whatsNewEl, whatsNewOn] = check('Show what\'s new after an update', s.showWhatsNew, 'Once, on the first start of a new version. About always lists the latest changes.');
   // The update status and its button, in Updates and again in About.
-  const updateRows = [0, 1].map(() => ({ status: h('span', { class: 'hint update-status' }), btn: h('button', { class: 'btn small', type: 'button' }) }));
-  const renderUpdateRow = (updateStatus: HTMLElement, updateBtn: HTMLButtonElement) => {
+  const updateRows = [0, 1].map(() => {
+    const status = h('span', { class: 'hint update-status' });
+    const btn = h('button', { class: 'btn small', type: 'button' });
+    return { el: h('div', { class: 'row update-row' }, status, btn), status, btn };
+  });
+  const renderUpdateRow = (row: HTMLElement, updateStatus: HTMLElement, updateBtn: HTMLButtonElement) => {
     const st = updater.state;
     updateStatus.textContent =
       st.kind === 'checking'
@@ -277,7 +281,7 @@ export function openSettings(tab?: SettingsTab): void {
     updateStatus.classList.toggle('error', st.kind === 'error');
     // A new version stands out from the usual "you have the latest" line.
     const found = st.kind === 'available' || st.kind === 'downloading' || st.kind === 'ready';
-    updateStatus.parentElement?.classList.toggle('found', found);
+    row.classList.toggle('found', found);
     const [label, run] =
       st.kind === 'available'
         ? ['Download', () => void updater.download()]
@@ -289,7 +293,7 @@ export function openSettings(tab?: SettingsTab): void {
     updateBtn.disabled = st.kind === 'checking' || st.kind === 'downloading';
     updateBtn.onclick = run;
   };
-  const renderUpdate = () => updateRows.forEach(({ status, btn }) => renderUpdateRow(status, btn));
+  const renderUpdate = () => updateRows.forEach(({ el, status, btn }) => renderUpdateRow(el, status, btn));
   renderUpdate();
   const offUpdate = updater.on(renderUpdate);
 
@@ -363,13 +367,13 @@ export function openSettings(tab?: SettingsTab): void {
       section(
         'Updates',
         field('New versions', updates, 'Updates come from GitHub Releases and are signed; only signed installers are accepted.'),
-        h('div', { class: 'row update-row' }, updateRows[0].status, updateRows[0].btn),
+        updateRows[0].el,
         whatsNewEl,
       ),
       section(
         'About',
         h('p', { class: 'hint' }, `Shellman ${store.sys.version} · settings are stored in `, configLink),
-        h('div', { class: 'row update-row' }, updateRows[1].status, updateRows[1].btn),
+        updateRows[1].el,
         whatsNew(),
       ),
   ];

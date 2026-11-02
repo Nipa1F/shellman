@@ -3,7 +3,7 @@ import './styles.css';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { api } from './api';
-import { bundledChangelog, releasesSince } from './changelog';
+import { bundledChangelog, releasesSince, type Release } from './changelog';
 import { collections } from './collections';
 import { baseName, deleteGroup, groupColor, groupPath, newGroup, ownerSession, sessionColor, uid } from './config';
 import { connectionCommand, connectionKindName, connectionLabel, connectionTarget, newSshConnection, parseQuickConnect } from './connection';
@@ -483,6 +483,21 @@ class App {
         ),
       ),
     );
+  }
+
+  /**
+   * After an update, shows once what changed since the version that ran before (not on a fresh install).
+   * `releases` is the changelog baked into this build; the e2e tests pass their own, since local builds
+   * have none.
+   */
+  showWhatsNewAfterUpdate(releases: Release[] = bundledChangelog().releases): void {
+    const current = store.sys.version;
+    const last = store.settings.lastVersion;
+    if (!current || last === current) return;
+    store.update((c) => (c.settings.lastVersion = current));
+    if (store.freshInstall || !store.settings.showWhatsNew) return;
+    const shown = releasesSince(releases, last, current);
+    if (shown.length) whatsNewDialog(shown);
   }
 
   // ---- reopening terminals after a restart ----------------------------
@@ -1566,18 +1581,6 @@ class App {
 /** The folder a file is in. */
 const dirName = (path: string): string => path.replace(/[\\/][^\\/]*$/, '');
 
-/** After an update, shows once what changed since the version that ran before (not on a fresh install). */
-function showWhatsNewAfterUpdate(): void {
-  const current = store.sys.version;
-  const last = store.settings.lastVersion;
-  if (!current || last === current) return;
-  store.update((c) => (c.settings.lastVersion = current));
-  if (store.freshInstall || !store.settings.showWhatsNew) return;
-  // Local builds have no changelog, so they never show it.
-  const releases = releasesSince(bundledChangelog().releases, last, current);
-  if (releases.length) whatsNewDialog(releases);
-}
-
 async function main(): Promise<void> {
   try {
     await store.init();
@@ -1590,7 +1593,7 @@ async function main(): Promise<void> {
   // For the end-to-end tests, which set up sessions and settings directly.
   (window as any).__shellmanStore = store;
   await app.restoreWorkspace();
-  showWhatsNewAfterUpdate();
+  app.showWhatsNewAfterUpdate();
   updater.start();
 }
 
